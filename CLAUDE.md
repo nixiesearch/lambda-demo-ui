@@ -8,11 +8,20 @@ A React + TypeScript demo application showcasing Nixiesearch hybrid search capab
 
 ## Prerequisites
 
-- **Nixiesearch Backend**: Must be running on `http://localhost:8080`
+- **Nixiesearch Backend**: Must be running on `http://localhost:8080` (configurable via environment variable)
 - **Wikipedia Index**: Named `wiki` with schema:
   - `_id`: ID field
   - `title`: Text field with `suggest: true` enabled
   - `content`: Text field with semantic search enabled
+
+## Environment Configuration
+
+The application uses environment variables to configure the API backend:
+
+- **VITE_API_BASE_URL**: Base URL for Nixiesearch API (default: `http://localhost:8080`)
+- Copy `.env.example` to `.env` and customize if needed
+- In development, an empty value uses the Vite proxy to `localhost:8080`
+- In production, this should point to your hosted Nixiesearch instance
 
 ## Development Commands
 
@@ -175,10 +184,23 @@ Autocomplete suggestions (App.tsx:177-216):
 - **React Hooks**: Enforces hooks rules
 - **React Refresh**: Fast Refresh compatibility checks
 
+## GitHub Pages Deployment
+
+The repository includes a GitHub Actions workflow (`.github/workflows/deploy.yml`) that automatically deploys to GitHub Pages on push to `master`:
+
+- **Node.js version**: 20 (required by Vite 7.2.2)
+- **Build configuration**: Uses `/lambda-demo-ui/` as base path (configured in vite.config.ts)
+- **API URL**: Set via `VITE_API_BASE_URL` environment variable in workflow
+- **Enable Pages**: Go to Settings → Pages → Source: "GitHub Actions"
+
+**Note**: For production deployments, update `VITE_API_BASE_URL` in the workflow to point to your hosted Nixiesearch instance. The current configuration uses `localhost:8080` which won't work from remote browsers due to CORS restrictions.
+
 ## Troubleshooting
 
 **No autocomplete suggestions**: Verify `title` field has `suggest: true` in Nixiesearch index schema
 
 **Search fails**: Check Nixiesearch is running on port 8080 and `wiki` index exists
+
+**API calls fail on GitHub Pages**: Ensure `VITE_API_BASE_URL` points to an accessible Nixiesearch instance with CORS enabled for your domain
 
 **Console logging**: All API calls and state changes are logged with categorized prefixes for debugging

@@ -4,17 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Search } from 'lucide-react'
 
+// API Base URL from environment variable (empty string uses relative URLs with Vite proxy in dev)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+
 // Types
-interface Suggestion {
-  text: string
-  score: number
-}
-
-interface SuggestResponse {
-  suggestions: Suggestion[]
-  took: number
-}
-
 interface SearchHit {
   _id: string
   title: string
@@ -28,58 +21,6 @@ interface SearchResponse {
 }
 
 // API Functions
-async function fetchSuggestions(query: string): Promise<SuggestResponse> {
-  const requestBody = {
-    query,
-    fields: ['title'],
-    count: 10
-  }
-
-  console.log('[API Request] Suggest:', {
-    url: '/v1/index/wiki/suggest',
-    method: 'POST',
-    body: requestBody,
-    timestamp: new Date().toISOString()
-  })
-
-  const startTime = performance.now()
-
-  try {
-    const response = await fetch('/v1/index/wiki/suggest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    })
-
-    const endTime = performance.now()
-    const responseTime = (endTime - startTime).toFixed(2)
-
-    if (!response.ok) {
-      console.error('[API Error] Suggest failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        responseTime: `${responseTime}ms`
-      })
-      throw new Error('Suggest request failed')
-    }
-
-    const data = await response.json()
-
-    console.log('[API Response] Suggest:', {
-      suggestionsCount: data.suggestions.length,
-      suggestions: data.suggestions.map((s: Suggestion) => s.text),
-      took: data.took,
-      responseTime: `${responseTime}ms`,
-      timestamp: new Date().toISOString()
-    })
-
-    return data
-  } catch (err) {
-    console.error('[API Error] Suggest exception:', err)
-    throw err
-  }
-}
-
 async function fetchSearchResults(query: string): Promise<SearchResponse> {
   const requestBody = {
     query: {
@@ -104,8 +45,10 @@ async function fetchSearchResults(query: string): Promise<SearchResponse> {
     size: 10
   }
 
+  const apiUrl = `${API_BASE_URL}/v1/index/wiki/search`
+
   console.log('[API Request] Search (RRF Hybrid):', {
-    url: '/v1/index/wiki/search',
+    url: apiUrl,
     method: 'POST',
     queryType: 'RRF (lexical multi_match + semantic)',
     lexicalFields: ['title', 'content'],
@@ -117,7 +60,7 @@ async function fetchSearchResults(query: string): Promise<SearchResponse> {
   const startTime = performance.now()
 
   try {
-    const response = await fetch('/v1/index/wiki/search', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
@@ -163,57 +106,11 @@ async function fetchSearchResults(query: string): Promise<SearchResponse> {
 function App() {
   // State
   const [query, setQuery] = useState('')
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [results, setResults] = useState<SearchHit[]>([])
   const [loading, setLoading] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
   const [searchStats, setSearchStats] = useState<{ took: number; count: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const searchPerformed = useRef(false)
-
-  // Debounced suggestions
-  useEffect(() => {
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current)
-      console.log('[State] Debounce timer cleared')
-    }
-
-    if (query.trim().length === 0) {
-      console.log('[State] Query empty, clearing suggestions')
-      setSuggestions([])
-      setShowSuggestions(false)
-      return
-    }
-
-    console.log('[State] Debounce started for query:', query)
-
-    debounceTimer.current = setTimeout(async () => {
-      // Don't fetch suggestions if a search was just performed
-      if (searchPerformed.current) {
-        console.log('[State] Skipping suggestions - search was performed')
-        return
-      }
-
-      console.log('[User Action] Fetching suggestions after debounce for:', query)
-      try {
-        const data = await fetchSuggestions(query)
-        console.log('[State] Setting suggestions:', data.suggestions.length, 'items')
-        setSuggestions(data.suggestions)
-        console.log('[State] Showing suggestions dropdown')
-        setShowSuggestions(true)
-      } catch (err) {
-        console.error('[API Error] Suggestion error:', err)
-      }
-    }, 150)
-
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current)
-      }
-    }
-  }, [query])
 
   // Log when results change
   useEffect(() => {
@@ -235,12 +132,6 @@ function App() {
     setLoading(true)
     console.log('[State] Clearing error state')
     setError(null)
-    console.log('[State] Hiding suggestions dropdown')
-    setShowSuggestions(false)
-    console.log('[State] Clearing suggestions array')
-    setSuggestions([])
-    console.log('[State] Resetting selected suggestion index')
-    setSelectedSuggestionIndex(-1)
     searchPerformed.current = true
 
     try {
@@ -267,7 +158,6 @@ function App() {
     const newValue = e.target.value
     console.log('[User Action] Input changed:', newValue)
     setQuery(newValue)
-    setSelectedSuggestionIndex(-1)
     searchPerformed.current = false
   }
 
@@ -275,47 +165,10 @@ function App() {
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     console.log('[User Action] Key pressed:', e.key)
 
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      if (showSuggestions && suggestions.length > 0) {
-        const newIndex = selectedSuggestionIndex < suggestions.length - 1
-          ? selectedSuggestionIndex + 1
-          : 0
-        console.log('[User Action] Arrow down - selecting suggestion index:', newIndex)
-        setSelectedSuggestionIndex(newIndex)
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      if (showSuggestions && suggestions.length > 0) {
-        const newIndex = selectedSuggestionIndex > 0
-          ? selectedSuggestionIndex - 1
-          : suggestions.length - 1
-        console.log('[User Action] Arrow up - selecting suggestion index:', newIndex)
-        setSelectedSuggestionIndex(newIndex)
-      }
-    } else if (e.key === 'Enter') {
-      if (showSuggestions && selectedSuggestionIndex >= 0 && suggestions[selectedSuggestionIndex]) {
-        console.log('[User Action] Enter key - selecting highlighted suggestion:', suggestions[selectedSuggestionIndex].text)
-        handleSuggestionClick(suggestions[selectedSuggestionIndex].text)
-      } else {
-        console.log('[User Action] Enter key - triggering search')
-        performSearch(query)
-      }
-    } else if (e.key === 'Escape') {
-      console.log('[User Action] Escape key - hiding suggestions')
-      setShowSuggestions(false)
-      setSelectedSuggestionIndex(-1)
+    if (e.key === 'Enter') {
+      console.log('[User Action] Enter key - triggering search')
+      performSearch(query)
     }
-  }
-
-  // Handle suggestion click
-  const handleSuggestionClick = (suggestion: string) => {
-    console.log('[User Action] Suggestion clicked:', suggestion)
-    console.log('[State] Setting query to:', suggestion)
-    setQuery(suggestion)
-    console.log('[State] Hiding suggestions dropdown')
-    setShowSuggestions(false)
-    performSearch(suggestion)
   }
 
   // Truncate text to 500 characters
@@ -347,38 +200,9 @@ function App() {
               value={query}
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
-              onFocus={() => {
-                console.log('[User Action] Input focused')
-                if (suggestions.length > 0) {
-                  console.log('[State] Showing suggestions dropdown (has', suggestions.length, 'suggestions)')
-                  setShowSuggestions(true)
-                }
-              }}
               className="pl-10 h-14 text-lg shadow-lg border-2 focus:border-blue-400"
             />
           </div>
-
-          {/* Autocomplete Dropdown */}
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto">
-              {suggestions.map((suggestion, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => handleSuggestionClick(suggestion.text)}
-                  className={`px-4 py-3 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
-                    idx === selectedSuggestionIndex
-                      ? 'bg-blue-100'
-                      : 'hover:bg-blue-50'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <Search size={16} className="text-gray-400 mr-3" />
-                    <span className="text-gray-800">{suggestion.text}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Search Stats */}
