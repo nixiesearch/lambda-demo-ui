@@ -190,10 +190,24 @@ The repository includes a GitHub Actions workflow (`.github/workflows/deploy.yml
 
 - **Node.js version**: 20 (required by Vite 7.2.2)
 - **Build configuration**: Uses `/lambda-demo-ui/` as base path (configured in vite.config.ts)
-- **API URL**: Set via `VITE_API_BASE_URL` environment variable in workflow
+- **API URL**: Set via `VITE_API_BASE_URL` GitHub Secret (required for production)
 - **Enable Pages**: Go to Settings → Pages → Source: "GitHub Actions"
 
-**Note**: For production deployments, update `VITE_API_BASE_URL` in the workflow to point to your hosted Nixiesearch instance. The current configuration uses `localhost:8080` which won't work from remote browsers due to CORS restrictions.
+### Setting Up the Production API Endpoint
+
+The workflow uses GitHub Secrets to securely configure the production Nixiesearch endpoint. To set this up:
+
+1. Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions**
+2. Click **New repository secret**
+3. Name: `VITE_API_BASE_URL`
+4. Value: Your production Nixiesearch endpoint (e.g., `https://your-api-domain.com` or AWS Lambda URL)
+5. Click **Add secret**
+
+**Important**:
+- The production endpoint MUST have CORS enabled for your GitHub Pages domain
+- Do NOT use `http://localhost:8080` - this only works for local development
+- The `.env` file is for local development only and is not committed to git
+- After updating the secret, push to `master` to trigger a new deployment with the updated endpoint
 
 ## Troubleshooting
 
